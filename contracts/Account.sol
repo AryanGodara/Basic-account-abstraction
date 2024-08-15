@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "hardhat/console.sol";
-
 import "@account-abstraction/contracts/core/EntryPoint.sol";
 import "@account-abstraction/contracts/interfaces/IAccount.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
 
 contract Account is IAccount {
     uint256 public count;
@@ -14,10 +14,14 @@ contract Account is IAccount {
         owner = _owner;
     }
 
-    function validateUserOp(UserOperation calldata, bytes32, uint256)
-    external pure returns (uint256 validationData)
+    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
+    external view returns (uint256 validationData)
     {
-        return 0;
+        address recovered = ECDSA.recover(
+            ECDSA.toEthSignedMessageHash(userOpHash), userOp.signature
+        );
+
+        return owner == recovered ? 0 : 1;
     }
 
     function execute() external {

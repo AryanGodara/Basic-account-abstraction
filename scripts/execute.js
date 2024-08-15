@@ -1,29 +1,36 @@
 const hre = require("hardhat");
 
-const FACTORY_NONCE = 1;
-const FACTORY_ADDRESS = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
+const AF_NONCE = 1;
+const AF_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 const EP_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const PM_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 async function main() {
     const entryPoint = await hre.ethers.getContractAt("EntryPoint", EP_ADDRESS);
 
     // CREATE: hash(deployer + nonce) -> deployer is the account factory here
     const sender = hre.ethers.getCreateAddress({
-        from: FACTORY_ADDRESS,
-        nonce: FACTORY_NONCE,
+        from: AF_ADDRESS,
+        nonce: AF_NONCE,
     });
+
+    console.log("sender address: ", {sender});
 
     const [signer0] = await hre.ethers.getSigners(); // Take the first private key from the ones generated when running local hardhat node
     const address0 = await signer0.getAddress();
 
     const AccountFactory = await hre.ethers.getContractFactory("AccountFactory");
-    const initCode = "0x"; // We only need to send init code once, else SenderCreator will try to initialize the smart account again
-        // FACTORY_ADDRESS +
-        // AccountFactory.interface.encodeFunctionData("createAccount", [address0]).slice(2); // remove the 0x prefix
 
-    console.log("sender address: ", sender)
+    const initCode = //"0x" // We only need to send init code once, else SenderCreator will try to initialize the smart account again
+        AF_ADDRESS +
+        AccountFactory.interface.encodeFunctionData("createAccount", [address0]).slice(2); // remove the 0x prefix
 
     const Account = await hre.ethers.getContractFactory("Account");
+
+    // Prefund the EntryPoint (since we don't have a paymaster at the moment)
+    await entryPoint.depositTo(PM_ADDRESS, {
+        value: hre.ethers.parseEther("100"),
+    });
 
     /**
      * User Operation struct
@@ -44,19 +51,19 @@ async function main() {
         nonce: await entryPoint.getNonce(sender, 0),
         initCode,
         callData: Account.interface.encodeFunctionData("execute"),
-        callGasLimit: 200_000,
-        verificationGasLimit: 200_000,
-        preVerificationGas: 50_000,
+        callGasLimit: 500_000,
+        verificationGasLimit: 500_000,
+        preVerificationGas: 500_000,
         maxFeePerGas: hre.ethers.parseUnits("10", "gwei"),
         maxPriorityFeePerGas: hre.ethers.parseUnits("5", "gwei"),
-        paymasterAndData: "0x",
+        paymasterAndData: PM_ADDRESS,
         signature: "0x",
     }
 
-    // Prefund the EntryPoint (since we don't have a paymaster at the moment)
-    // await entryPoint.depositTo(sender, {
-    //     value: hre.ethers.parseEther("100"),
-    // });
+    const userOpHash = await entryPoint.getUserOpHash(userOp)
+    userOp.signature = signer0.signMessage(
+        hre.ethers.getBytes(userOpHash)
+    );
 
     const tx = await entryPoint.handleOps([userOp], address0);
     const receipt = await tx.wait();
