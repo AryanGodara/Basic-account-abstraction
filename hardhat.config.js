@@ -1,8 +1,14 @@
 require("@nomicfoundation/hardhat-toolbox");
-
+require("dotenv").config();
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  defaultNetwork: "localhost",
+  defaultNetwork: "sep", // "localhost",
+  networks: {
+    sep: {
+      url: process.env.RPC_URL,
+      accounts: [process.env.PRIVATE_KEY]
+    }
+  },
   solidity: {
     version: "0.8.19",
     settings: {
